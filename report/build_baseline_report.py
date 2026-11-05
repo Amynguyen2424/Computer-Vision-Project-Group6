@@ -200,6 +200,10 @@ def build_html(d):
     small_by_person = d["hands"][d["hands"]["area_frac"] < 0.01].groupby("person").size()
     small_owner = small_by_person.idxmax()
     iou_low = person["mean_IoU_correct"].idxmin()
+    iou_low_note = (f" and precision ({person.loc[iou_low, 'precision']:.2f}), which points to a different box style rather than a harder set of photos"
+                    if person["precision"].idxmin() == iou_low else
+                    f" even though its precision is {person.loc[iou_low, 'precision']:.2f}: the model finds those hands, but the boxes "
+                    "are drawn differently, a labelling-style difference rather than harder photos")
 
     counts = pd.crosstab(man["split"] + " · " + man["source"].map({"hagrid": "HaGRID", "team": "our photos"}),
                          man["class"])[CLASSES]
@@ -220,18 +224,23 @@ def build_html(d):
     dup_txt = "; ".join(f"<code>{a}</code> ({pa}) = <code>{b}</code> ({pb})" for a, pa, b, pb in dups)
     data_issues = []
     if held_out:
-        data_issues.append(f"Amy's <code>palm_369</code>–<code>palm_376</code> have no label files yet, so the palm class has only "
-                           f"{int(team_cls.loc['palm', 'hands'])} labelled hands in our photos instead of about 30.")
+        data_issues.append(("Data gap.", f"Amy's <code>palm_369</code>–<code>palm_376</code> have no label files yet, so the palm class has only "
+                            f"{int(team_cls.loc['palm', 'hands'])} labelled hands in our photos instead of about 30."))
     if dups:
-        data_issues.append(f"{len(dups)} pairs of our test photos are the same picture contributed by two members ({dup_txt}). "
-                           f"Those hands count twice, so the test set has {n_team - len(dups)} distinct photos, not {n_team}.")
+        data_issues.append(("Duplicate photos.", f"{len(dups)} pairs of our test photos are the same picture contributed by two members ({dup_txt}). "
+                            f"Those hands count twice, so the test set has {n_team - len(dups)} distinct photos, not {n_team}."))
 
     tuning = ROOT / "results" / "tuning_imgsz_summary.csv"
     if tuning.exists():
-        t = pd.read_csv(tuning, index_col="run")
-        imgsz_note = ("We tested larger image sizes first (<code>Gesture_YOLO_Tuning_imgsz.ipynb</code>): team mAP50 was "
-                      + ", ".join(f"{r['team mAP50']:.3f} at {int(r['imgsz'])}" for _, r in t.sort_values("imgsz").iterrows())
-                      + ", and small-hand recall did not improve. The training set is not short of small hands; it is short of our kind "
+        t = pd.read_csv(tuning, index_col="run").sort_values("imgsz")
+        n_small = int(small["hands"])
+        small_found = (t["small-hand recall"] * n_small).round().astype(int)
+        small_change = int((small_found - small_found["baseline"]).abs().max())
+        imgsz_note = ("We tested other image sizes (<code>Gesture_YOLO_Tuning_imgsz.ipynb</code>): team mAP50 was "
+                      + ", ".join(f"{r['team mAP50']:.3f} at {int(r['imgsz'])}" for _, r in t.iterrows())
+                      + ", and small hands found were " + ", ".join(f"{n}" for n in small_found) + f" of {n_small}, "
+                      f"so no size changed small-hand recall by more than {small_change} hand{'s' if small_change != 1 else ''}. "
+                      "The training set is not short of small hands; it is short of our kind "
                       "of scene (crowds, outdoors, several people). More varied training photos and context-changing augmentation "
                       "(mosaic, mixup, scale) are the more promising levers.")
     else:
@@ -254,8 +263,8 @@ def build_html(d):
 </section>
 
 <p class="lead">The baseline is close to perfect on held-out HaGRID images but loses {gap:.2f} mAP50 on the photos our group
-collected. Most of that loss comes from <b>small hands in wide shots</b> and from <b>fists</b>, which the model either misses or
-confuses with a thumbs-down. The model is fast enough for a live photo booth, and a higher confidence threshold
+collected. Its weakest spots are <b>small hands in wide shots</b> (only {small['recall']:.0%} found) and <b>fists</b>
+({cls.loc['fist', 'recall']:.0%} found), which the model either misses or confuses with a thumbs-down. The model is fast enough for a live photo booth, and a higher confidence threshold
 ({best['conf']}) trades a little recall for noticeably fewer false triggers.</p>
 
 <h2>1. What was evaluated</h2>
@@ -341,8 +350,7 @@ of the image, and the median training hand ({np.median(train_area) * 100:.1f}%) 
 HaGRID's small hands belong to one person posing in a plain room; ours are in crowds, outdoors and at odd angles.
 <b>Per member</b>, the differences follow photo choice and labelling style. {small_owner}'s photos hold
 {small_by_person[small_owner]} of the {int(small['hands'])} small hands, which lowers recall there.
-{iou_low}'s photos have the lowest mean box IoU ({person.loc[iou_low, 'mean_IoU_correct']:.2f}) and precision
-({person.loc[iou_low, 'precision']:.2f}), which points to a different box style rather than a harder set of photos.</p>
+{iou_low}'s photos have the lowest mean box IoU ({person.loc[iou_low, 'mean_IoU_correct']:.2f}){iou_low_note}.</p>
 <img src="../../results/baseline/failure_cases.jpg" class="full">
 <p class="caption">Green = our label, red = prediction (conf ≥ {deploy}). Top row: smallest missed hands. Bottom row: wrong-class
 predictions. These are mostly fist/dislike confusions, two of them on the same duplicated photo.</p>
@@ -356,7 +364,7 @@ postprocess {sp['postprocess']:.1f} ms, <b>{total_ms:.1f} ms in total (≈{1000 
 <h2>8. Limits of this evaluation</h2>
 <ul>
 <li><b>Small test set.</b> {ea['hands']} hands in {n_team} photos. The bootstrap interval for F1 in Section 3 spans {ci['F1'][1] - ci['F1'][0]:.2f}.</li>
-{"".join(f"<li><b>Data gap.</b> {t}</li>" for t in data_issues)}
+{"".join(f"<li><b>{title}</b> {text}</li>" for title, text in data_issues)}
 <li><b>Validation is optimistic.</b> It is HaGRID-only and drawn from the same distribution as training, so checkpoint selection
 does not reward robustness to our kind of photo.</li>
 <li><b>One training seed.</b> Run-to-run variation was not measured; it should be kept in mind when comparing tuned models.</li>

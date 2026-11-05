@@ -27,8 +27,8 @@
   "eval_imgsz": 960,
   "split_sizes": {
     "train": 1280,
-    "val": 160,
-    "test": 152
+    "test": 160,
+    "val": 160
   },
   "overall": {
     "validation (160)": {
@@ -38,25 +38,25 @@
       "mAP50": 0.9948,
       "mAP50-95": 0.7476
     },
-    "test, all (152)": {
-      "precision": 0.8207,
-      "recall": 0.7821,
-      "F1": 0.801,
-      "mAP50": 0.8155,
-      "mAP50-95": 0.4202
+    "test, all (160)": {
+      "precision": 0.8857,
+      "recall": 0.7896,
+      "F1": 0.8349,
+      "mAP50": 0.8605,
+      "mAP50-95": 0.4692
     },
-    "test, team only (120)": {
-      "precision": 0.8047,
-      "recall": 0.7242,
-      "F1": 0.7623,
-      "mAP50": 0.7688,
-      "mAP50-95": 0.3571
+    "test, team only (128)": {
+      "precision": 0.8544,
+      "recall": 0.7584,
+      "F1": 0.8035,
+      "mAP50": 0.8197,
+      "mAP50-95": 0.4183
     }
   },
   "val_speed_ms_per_image": {
-    "preprocess": 1.75,
-    "inference": 11.89,
+    "preprocess": 2.38,
+    "inference": 11.52,
     "loss": 0.0,
-    "postprocess": 1.53
+    "postprocess": 1.65
   }
 }

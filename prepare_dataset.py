@@ -1,6 +1,7 @@
 """Build the YOLO dataset for the gesture-controlled photo booth (Group 6).
 
-Reads the Google Drive export (images/ + labels/, files named <class>_<NNN>.<ext>),
+Reads the group Google Drive folder (images/ + labels/, files named <class>_<NNN>.<ext>),
+by default straight from Google Drive for desktop (G:),
 checks every image/label pair, fixes Joseph's class-ID order, and copies the files
 into dataset/images/{train,val,test} and dataset/labels/{train,val,test}.
 
@@ -9,7 +10,7 @@ Split (per class, from the group's split doc, 80/10/10):
     Team   369-400 -> test (our own photos are the test data, as the brief says)
 
 Usage:
-    python prepare_dataset.py
+    python prepare_dataset.py                       (Drive for desktop, G:)
     python prepare_dataset.py --images <dir> [<dir> ...] --labels <dir>
 """
 import argparse
@@ -21,12 +22,17 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-DOWNLOADS = Path.home() / "Downloads"
-DEFAULT_IMAGES = [
-    DOWNLOADS / "images-20261105T072605Z-1-001" / "images",
-    DOWNLOADS / "images-20261105T072605Z-1-002" / "images",
-]
-DEFAULT_LABELS = DOWNLOADS / "labels-20261105T072606Z-1-001" / "labels"
+DRIVE_FOLDER = "ComputerVisionProject-Group6-Dataset"
+DRIVE_FOLDER_ID = "1etLHDUerYnEui6lrK9L7-p1An5c1jLfO"
+
+
+def find_drive_dataset():
+    """The group Drive folder as mounted by Google Drive for desktop (G:), or None."""
+    for root in [Path("G:/My Drive") / DRIVE_FOLDER,
+                 Path("G:/.shortcut-targets-by-id") / DRIVE_FOLDER_ID / DRIVE_FOLDER]:
+        if (root / "images").is_dir() and (root / "labels").is_dir():
+            return root
+    return None
 
 CLASSES = {"palm": 0, "fist": 1, "like": 2, "dislike": 3}
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
@@ -83,9 +89,17 @@ def remap_joseph(rows, expected):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--images", nargs="+", type=Path, default=DEFAULT_IMAGES)
-    ap.add_argument("--labels", type=Path, default=DEFAULT_LABELS)
+    ap.add_argument("--images", nargs="+", type=Path)
+    ap.add_argument("--labels", type=Path)
     args = ap.parse_args()
+    if args.images is None or args.labels is None:
+        drive = find_drive_dataset()
+        if drive is None:
+            sys.exit(f"Can't find '{DRIVE_FOLDER}' on G:. Install Google Drive for desktop and add the "
+                     "shared folder to My Drive, or pass --images and --labels.")
+        args.images = args.images or [drive / "images"]
+        args.labels = args.labels or drive / "labels"
+        print(f"reading from Google Drive: {drive}")
 
     # Files not named <class>_<NNN> (e.g. Drive's "Copy of palm_369.txt") are skipped.
     images, problems, ignored = {}, [], []
