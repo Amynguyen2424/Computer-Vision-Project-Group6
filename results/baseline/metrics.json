@@ -1,0 +1,50 @@
+{
+  "model": "yolov8s.pt (COCO-pretrained) fine-tuned",
+  "hyperparameters": {
+    "data": "data.yaml",
+    "epochs": 50,
+    "patience": 15,
+    "imgsz": 640,
+    "batch": 16,
+    "optimizer": "SGD",
+    "lr0": 0.01,
+    "momentum": 0.937,
+    "weight_decay": 0.0005,
+    "fliplr": 0.5,
+    "flipud": 0.0,
+    "seed": 0,
+    "deterministic": true,
+    "workers": 4,
+    "cache": "ram"
+  },
+  "epochs_run": 50,
+  "best_epoch": 41,
+  "split_sizes": {
+    "train": 1280,
+    "val": 160,
+    "test": 152
+  },
+  "overall": {
+    "validation (160)": {
+      "precision": 0.9896,
+      "recall": 0.9836,
+      "F1": 0.9866,
+      "mAP50": 0.9898,
+      "mAP50-95": 0.7478
+    },
+    "test, all (152)": {
+      "precision": 0.8657,
+      "recall": 0.7971,
+      "F1": 0.83,
+      "mAP50": 0.8202,
+      "mAP50-95": 0.4268
+    },
+    "test, team only (120)": {
+      "precision": 0.826,
+      "recall": 0.7513,
+      "F1": 0.7869,
+      "mAP50": 0.7806,
+      "mAP50-95": 0.3618
+    }
+  }
+}
