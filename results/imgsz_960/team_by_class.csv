@@ -1,0 +1,5 @@
+,hands,recall,precision,missed,wrong_class
+palm,24.0,0.958,0.92,1.0,0.0
+fist,36.0,0.472,0.548,18.0,1.0
+like,42.0,0.833,0.814,6.0,1.0
+dislike,39.0,0.641,0.658,12.0,2.0

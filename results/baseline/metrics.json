@@ -50,9 +50,9 @@
   "weights": "baseline_best.pt",
   "eval_imgsz": 640,
   "val_speed_ms_per_image": {
-    "preprocess": 0.69,
-    "inference": 3.1,
+    "preprocess": 0.85,
+    "inference": 4.38,
     "loss": 0.0,
-    "postprocess": 0.76
+    "postprocess": 1.25
   }
 }

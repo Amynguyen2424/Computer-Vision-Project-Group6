@@ -17,9 +17,6 @@ import shutil
 from pathlib import Path
 
 import cv2
-import matplotlib
-
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -252,7 +249,7 @@ def error_analysis(weights, imgsz, out_dir, conf=0.25, iou_thr=0.5):
     """Detection-level analysis of the team photos at a deployment threshold.
 
     Writes error_analysis.json, team_by_person.csv, team_by_size.csv, team_by_class.csv,
-    conf_sweep.csv, team_hands.csv, confusion_conf025.png and failure_cases.jpg.
+    conf_sweep.csv, team_hands.csv, team_preds.csv, confusion_conf025.png and failure_cases.jpg.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -276,6 +273,7 @@ def error_analysis(weights, imgsz, out_dir, conf=0.25, iou_thr=0.5):
     hands, preds = _score(images, conf, iou_thr)
     hands["size"] = pd.cut(hands["area_frac"], SIZE_BINS, labels=SIZE_LABELS)
     hands.to_csv(out_dir / "team_hands.csv", index=False)
+    preds.to_csv(out_dir / "team_preds.csv", index=False)
 
     by_person = pd.DataFrame({p: _prf(hands[hands["person"] == p], preds[preds["person"] == p])
                               for p in sorted(team["person"].unique())}).T
@@ -327,6 +325,7 @@ def error_analysis(weights, imgsz, out_dir, conf=0.25, iou_thr=0.5):
 
 
 def main():
+    plt.switch_backend("Agg")   # figures are only saved when run as a script
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("weights", nargs="+", type=Path, help="checkpoints, e.g. models/*.pt")
     ap.add_argument("--out-root", type=Path, default=ROOT / "results",

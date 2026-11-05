@@ -1,0 +1,4 @@
+size,hands,recall,missed
+small (<1%),16,0.438,8
+medium (1-5%),71,0.746,16
+large (>5%),54,0.833,6
