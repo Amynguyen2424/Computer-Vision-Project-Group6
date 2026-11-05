@@ -37,9 +37,13 @@ TEAM = [(369, 376, "Amy"), (377, 384, "Ben"), (385, 392, "Daff"), (393, 400, "Jo
 N_VAL, N_TEST_HAGRID = 40, 8
 SEED = 42
 
-# Joseph's MakeSense label list was ordered like, dislike, palm, fist,
-# so his files say like=0, dislike=1, palm=2, fist=3. Map back to ours.
-JOSEPH_REMAP = {0: 2, 1: 3, 2: 0, 3: 1}
+# Joseph's labels don't use our class order. His first export (MakeSense list like,
+# dislike, palm, fist) and the redone Drive labels of 2026-11-05 (palm, like, dislike,
+# fist) differ, so each file is mapped with whichever order matches its file name.
+JOSEPH_REMAPS = [
+    {0: 0, 1: 2, 2: 3, 3: 1},   # 2026-11-05 Drive labels: palm=0, like=1, dislike=2, fist=3
+    {0: 2, 1: 3, 2: 0, 3: 1},   # first export: like=0, dislike=1, palm=2, fist=3
+]
 
 OUT = Path(__file__).parent / "dataset"
 
@@ -50,7 +54,7 @@ def person(num):
     return next(name for lo, hi, name in TEAM if lo <= num <= hi)
 
 
-def read_label(path, num):
+def read_label(path):
     """Return the label's rows as (class_id, x, y, w, h); raise ValueError if malformed."""
     rows = []
     for line_no, line in enumerate(path.read_text().splitlines(), 1):
@@ -62,12 +66,19 @@ def read_label(path, num):
         cls, coords = int(parts[0]), [float(v) for v in parts[1:]]
         if not all(0.0 <= v <= 1.0 for v in coords) or coords[2] <= 0 or coords[3] <= 0:
             raise ValueError(f"line {line_no}: coordinates out of range {coords}")
-        if person(num) == "Joseph":
-            cls = JOSEPH_REMAP[cls]
         rows.append((cls, *coords))
     if not rows:
         raise ValueError("empty label file")
     return rows
+
+
+def remap_joseph(rows, expected):
+    """Map Joseph's class IDs to ours with the order that matches the file name."""
+    for remap in JOSEPH_REMAPS:
+        mapped = [(remap.get(c, c), *xywh) for c, *xywh in rows]
+        if all(c == expected for c, *_ in mapped):
+            return mapped
+    return rows   # no order fits; the class-ID check reports it
 
 
 def main():
@@ -76,18 +87,24 @@ def main():
     ap.add_argument("--labels", type=Path, default=DEFAULT_LABELS)
     args = ap.parse_args()
 
-    images, problems = {}, []
+    # Files not named <class>_<NNN> (e.g. Drive's "Copy of palm_369.txt") are skipped.
+    images, problems, ignored = {}, [], []
     for d in args.images:
         for p in d.iterdir():
             if p.suffix.lower() not in IMAGE_EXTS:
                 continue
             if not NAME_RE.match(p.stem):
-                problems.append(f"unexpected image name: {p.name}")
+                ignored.append(p.name)
             elif p.stem in images:
                 problems.append(f"duplicate image: {p.stem}")
             else:
                 images[p.stem] = p
-    labels = {p.stem: p for p in args.labels.glob("*.txt")}
+    labels = {}
+    for p in args.labels.glob("*.txt"):
+        if NAME_RE.match(p.stem):
+            labels[p.stem] = p
+        else:
+            ignored.append(p.name)
 
     for stem in sorted(images.keys() - labels.keys()):
         problems.append(f"image without label: {stem}")
@@ -99,10 +116,12 @@ def main():
         cls_name, num = NAME_RE.match(stem).groups()
         num = int(num)
         try:
-            rows = read_label(labels[stem], num)
+            rows = read_label(labels[stem])
         except ValueError as e:
             problems.append(f"bad label {stem}: {e}")
             continue
+        if person(num) == "Joseph":
+            rows = remap_joseph(rows, CLASSES[cls_name])
         wrong = [r[0] for r in rows if r[0] != CLASSES[cls_name]]
         if wrong:
             problems.append(f"class-ID mismatch {stem}: expected {CLASSES[cls_name]}, got {wrong}")
@@ -112,6 +131,8 @@ def main():
                         "person": person(num)})
 
     print(f"images found: {len(images)}   labels found: {len(labels)}   usable pairs: {len(records)}")
+    if ignored:
+        print(f"ignored {len(ignored)} file(s) not named <class>_<NNN>: {', '.join(sorted(ignored))}")
     if problems:
         print(f"\n{len(problems)} problem(s):")
         for p in problems:
