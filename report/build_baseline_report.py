@@ -233,7 +233,7 @@ def build_html(d):
                       + ", ".join(f"{r['team mAP50']:.3f} at {int(r['imgsz'])}" for _, r in t.sort_values("imgsz").iterrows())
                       + ", and small-hand recall did not improve. The training set is not short of small hands; it is short of our kind "
                       "of scene (crowds, outdoors, several people). More varied training photos and context-changing augmentation "
-                      "(mosaic, copy-paste, blur) are the more promising levers.")
+                      "(mosaic, mixup, scale) are the more promising levers.")
     else:
         imgsz_note = "Larger image sizes (<code>imgsz</code> 800-960) or scale augmentation are the obvious things to try."
     css = (Path(__file__).parent / "report.css").read_text()
