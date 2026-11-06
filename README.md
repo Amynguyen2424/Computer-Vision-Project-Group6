@@ -70,4 +70,75 @@ Open a notebook, check that the kernel (top right) is **Python (CV Group 6)**, t
 | `report/Baseline_Evaluation_Report.pdf` | Detailed baseline evaluation. Rebuild it with `python report/build_baseline_report.py` (Windows, needs Microsoft Edge) |
 | `models/`, `results/` | Saved weights and the evaluation output of every run |
 
-Our own photos (numbers 369-400 of each class) are the test set, so always compare models on the **team-only test** numbers, not on validation. 
+Our own photos (numbers 369-400 of each class) are the test set, so always compare models on the **team-only test** numbers, not on validation.
+
+## 6. Tune your hyperparameter
+Each of us changes **one** hyperparameter to **three** values different from the baseline and compares against it. Everything else must stay at the baseline values, which are defined once in `gesture_eval.py`:
+
+| Key | Baseline | Key | Baseline |
+|---|---|---|---|
+| `epochs` | 50 | `optimizer` | `"SGD"` |
+| `patience` | 15 | `lr0` | 0.01 |
+| `imgsz` | 640 (taken by Ben) | `momentum` | 0.937 |
+| `batch` | 16 | `weight_decay` | 0.0005 |
+| `fliplr` | 0.5 | `flipud` | 0.0 |
+| `seed` | 0 | `deterministic` | True |
+
+Any other [Ultralytics training setting](https://docs.ultralytics.com/modes/train/#train-settings) works too (for example `mosaic`, `mixup`, `scale`, `degrees`, `hsv_s`, `cos_lr`, `dropout`), at its default value for the baseline. `copy_paste` only affects segmentation models, and `erasing` and `auto_augment` only affect classification models, so they won't change our detector.
+
+**Steps**
+1. Make your own branch: `git checkout -b <your name>`.
+2. In JupyterLab, create a new notebook in the project folder named `Gesture_YOLO_Tuning_<parameter>.ipynb` and pick the **Python (CV Group 6)** kernel.
+3. Paste this into a cell, set `PARAM` and `VALUES`, and run it. It trains one model per value with everything else at the baseline, then scores the baseline and your models with the same code:
+
+```python
+import shutil
+from pathlib import Path
+
+import pandas as pd
+from ultralytics import YOLO
+
+from gesture_eval import BASELINE, evaluate, error_analysis
+
+PARAM = "lr0"                      # your hyperparameter: one key of BASELINE (or another Ultralytics setting)
+VALUES = [0.001, 0.005, 0.02]      # three values, all different from the baseline's
+
+# 1. Train one model per value (skipped if it is already saved; delete the .pt file to retrain)
+for v in VALUES:
+    name = f"{PARAM}_{v}"
+    weights, out = Path("models") / f"{name}_best.pt", Path("results") / name
+    if weights.exists():
+        continue
+    model = YOLO("yolov8s.pt")
+    model.train(**{**BASELINE, PARAM: v}, project="runs", name=name, exist_ok=True)
+    run = Path(model.trainer.save_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(run / "weights" / "best.pt", weights)
+    for f in ["results.csv", "results.png", "args.yaml"]:
+        shutil.copy2(run / f, out / f)
+
+# 2. Score the baseline and your models with the same code
+runs = {BASELINE.get(PARAM, "default"): "baseline", **{v: f"{PARAM}_{v}" for v in VALUES}}
+rows = []
+for v, name in runs.items():
+    weights = Path("models") / f"{name}_best.pt"
+    imgsz = v if PARAM == "imgsz" else BASELINE["imgsz"]
+    overall, per_class = evaluate(weights, imgsz, Path("results") / name)
+    ea = error_analysis(weights, imgsz, Path("results") / name)
+    team = overall.iloc[2]         # "test, team only": our own photos
+    rows.append({PARAM: v, "run": name, "team mAP50": team["mAP50"], "team mAP50-95": team["mAP50-95"],
+                 "team F1": team["F1"], "fist mAP50": per_class.loc[("test (team only)", "fist"), "mAP50"],
+                 "F1 @ conf 0.25": ea["summary"]["F1"]})
+summary = pd.DataFrame(rows).set_index(PARAM)
+summary.round(4).to_csv(Path("results") / f"tuning_{PARAM}_summary.csv")
+summary.round(3)
+```
+
+4. Below it, add your plots and a short discussion: which value is best, by how much, and why. Each run's folder in `results/` has the training curves, confusion matrices and error analysis files to draw from. `Gesture_YOLO_Tuning_imgsz.ipynb` is a full worked example.
+5. Commit your notebook, `models/<parameter>_*_best.pt`, `results/<parameter>_*/` and `results/tuning_<parameter>_summary.csv` to your branch. `dataset/` and `runs/` are ignored by git on purpose.
+
+**Things to keep in mind**
+- **Don't edit `BASELINE` in `gesture_eval.py`.** Everyone's comparison depends on it.
+- **Training time:** each run takes about 5-25 minutes on an RTX 5060 Ti, depending on the setting, and much longer on a laptop CPU. Three runs on a CPU can take hours. If your computer has no NVIDIA GPU, ask Ben to run your training.
+- If training stops with a memory error, lower the batch size for your runs only (`{**BASELINE, PARAM: v, "batch": 8}`) and say so in your discussion. If the data loader hangs on Windows, add `"workers": 0`.
+- **Noise:** on our 128 photos, a single model's F1 is uncertain by about ±0.06 (see the baseline report). Differences smaller than that are not real improvements. 
