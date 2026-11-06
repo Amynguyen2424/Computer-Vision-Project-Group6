@@ -19,8 +19,8 @@
     "F1": 0.838
   },
   "predict_speed_ms_per_image": {
-    "preprocess": 1.56,
-    "inference": 7.44,
-    "postprocess": 1.16
+    "preprocess": 2.13,
+    "inference": 12.09,
+    "postprocess": 2.43
   }
 }

@@ -54,9 +54,9 @@
     }
   },
   "val_speed_ms_per_image": {
-    "preprocess": 1.15,
-    "inference": 5.4,
+    "preprocess": 1.89,
+    "inference": 8.83,
     "loss": 0.0,
-    "postprocess": 0.79
+    "postprocess": 1.7
   }
 }
