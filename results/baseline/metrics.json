@@ -33,26 +33,26 @@
       "mAP50-95": 0.7478
     },
     "test, all (160)": {
-      "precision": 0.9057,
-      "recall": 0.8066,
-      "F1": 0.8533,
-      "mAP50": 0.8636,
-      "mAP50-95": 0.4628
+      "precision": 0.9114,
+      "recall": 0.8107,
+      "F1": 0.8581,
+      "mAP50": 0.8745,
+      "mAP50-95": 0.4691
     },
     "test, team only (128)": {
-      "precision": 0.887,
-      "recall": 0.7682,
-      "F1": 0.8234,
-      "mAP50": 0.83,
-      "mAP50-95": 0.4119
+      "precision": 0.8937,
+      "recall": 0.7748,
+      "F1": 0.83,
+      "mAP50": 0.8448,
+      "mAP50-95": 0.4185
     }
   },
   "weights": "baseline_best.pt",
   "eval_imgsz": 640,
   "val_speed_ms_per_image": {
-    "preprocess": 0.85,
-    "inference": 4.84,
+    "preprocess": 0.71,
+    "inference": 3.85,
     "loss": 0.0,
-    "postprocess": 1.49
+    "postprocess": 0.65
   }
 }

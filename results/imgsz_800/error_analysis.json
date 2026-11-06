@@ -2,25 +2,25 @@
   "conf": 0.25,
   "iou": 0.5,
   "images": 128,
-  "hands": 155,
-  "predictions": 154,
+  "hands": 154,
+  "predictions": 153,
   "correct": 124,
-  "precision": 0.8052,
-  "recall": 0.8,
-  "F1": 0.8026,
+  "precision": 0.8105,
+  "recall": 0.8052,
+  "F1": 0.8078,
   "missed_hands": 25,
-  "wrong_class": 6,
+  "wrong_class": 5,
   "background_false_positives": 24,
-  "mean_IoU_correct": 0.7746,
+  "mean_IoU_correct": 0.7757,
   "best_F1_conf": {
     "conf": 0.35,
-    "precision": 0.8542,
-    "recall": 0.7935,
-    "F1": 0.8227
+    "precision": 0.8601,
+    "recall": 0.7987,
+    "F1": 0.8283
   },
   "predict_speed_ms_per_image": {
-    "preprocess": 3.16,
-    "inference": 12.41,
-    "postprocess": 2.5
+    "preprocess": 2.41,
+    "inference": 6.46,
+    "postprocess": 0.93
   }
 }

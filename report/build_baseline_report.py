@@ -28,6 +28,13 @@ BUILD = Path(__file__).resolve().parent / "build"
 PDF = Path(__file__).resolve().parent / "Baseline_Evaluation_Report.pdf"
 CLASSES = ["palm", "fist", "like", "dislike"]
 
+# Label mistakes found by checking every team photo against the models' predictions (2026-11-05).
+# The group decided to keep them as they are and report them as human error.
+LOOSE_BOXES = ["fist_380.png", "fist_381.png", "fist_384.png"]          # Ben: box much larger than the fist
+UNLABELLED = {"fist_376.jpg": "2 raised fists", "fist_382.png": "2 raised fists in the crowd",
+              "palm_388.jpg": "palms of the people behind the main subject"}
+AMBIGUOUS = {"palm_376.jpg": "hand held across the face, back of the hand to the camera"}
+
 # Categorical slots 1-4 (validated default palette) and recessive ink.
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
 INK, INK_2, GRID = "#0b0b0b", "#52514e", "#e4e3df"
@@ -227,8 +234,21 @@ def build_html(d):
         data_issues.append(("Data gap.", f"Amy's <code>palm_369</code>–<code>palm_376</code> have no label files yet, so the palm class has only "
                             f"{int(team_cls.loc['palm', 'hands'])} labelled hands in our photos instead of about 30."))
     if dups:
-        data_issues.append(("Duplicate photos.", f"{len(dups)} pairs of our test photos are the same picture contributed by two members ({dup_txt}). "
+        data_issues.append(("Duplicate photos.", (f"{len(dups)} pairs of our test photos are" if len(dups) > 1 else "One pair of our test photos is")
+                            + f" the same picture contributed by two members ({dup_txt}). "
                             f"Those hands count twice, so the test set has {n_team - len(dups)} distinct photos, not {n_team}."))
+    hands, preds = d["hands"], d["preds"]
+    loose_missed = int((hands["file"].isin(LOOSE_BOXES) & ~hands["correct"]).sum())
+    label_bg = int((preds["file"].isin(LOOSE_BOXES + list(UNLABELLED)) & (preds["true_class"] == "background")).sum())
+    code = lambda f: f"<code>{Path(f).stem}</code>"
+    data_issues.append(("Labelling errors (human error).",
+        f"Checking every photo against the model's predictions found label mistakes that were left in the test set: boxes drawn "
+        f"much larger than the fist in {', '.join(code(f) for f in LOOSE_BOXES)}; gesturing hands that were never labelled in "
+        + "; ".join(f"{code(f)} ({v})" for f, v in UNLABELLED.items())
+        + "; and an unclear gesture in " + "; ".join(f"{code(f)} ({v})" for f, v in AMBIGUOUS.items()) + ". "
+        f"A tight, correct box on a loose label overlaps it by less than 0.5 IoU and counts as a miss plus a false positive, and a detection "
+        f"of an unlabelled hand counts as a false positive. At conf {deploy} these cause {loose_missed} of the {ea['missed_hands']} missed hands "
+        f"and {label_bg} of the {ea['background_false_positives']} background predictions, so the scores on our photos (fist most of all) are slightly pessimistic."))
 
     tuning = ROOT / "results" / "tuning_imgsz_summary.csv"
     if tuning.exists():
@@ -316,7 +336,8 @@ differences between tuned models should not be over-read.</p>
 {table(team_cls, index_name="our photos")}
 <p class="caption">Precision, recall and mAP from Ultralytics; missed and wrong-class counts at conf {deploy}, IoU 0.5.</p>
 <p><b>Palm and like transfer well</b>: their shapes are distinctive (spread fingers, upward thumb).
-<b>Fist is the weakest class</b>: {int(cls.loc['fist', 'missed'])} of {int(cls.loc['fist', 'hands'])} fists are missed entirely.
+<b>Fist is the weakest class</b>: {int(cls.loc['fist', 'missed'])} of {int(cls.loc['fist', 'hands'])} fists are missed entirely
+({loose_missed} of them only because their labels were drawn too loosely; Section 8).
 A fist is a compact, low-texture blob that looks like many other things at small scale, and several of our fists are
 raised in crowd scenes with busy backgrounds, which HaGRID never shows (Section 6). <b>Dislike</b> is confused with fist
 in both directions: a thumbs-down seen from the side is a fist with a short thumb, and these are the highest-confidence errors (Section 6).</p>
@@ -353,7 +374,7 @@ HaGRID's small hands belong to one person posing in a plain room; ours are in cr
 {iou_low}'s photos have the lowest mean box IoU ({person.loc[iou_low, 'mean_IoU_correct']:.2f}){iou_low_note}.</p>
 <img src="../../results/baseline/failure_cases.jpg" class="full">
 <p class="caption">Green = our label, red = prediction (conf ≥ {deploy}). Top row: smallest missed hands. Bottom row: wrong-class
-predictions. These are mostly fist/dislike confusions, two of them on the same duplicated photo.</p>
+predictions: fist/dislike and palm/like confusions.</p>
 
 <h2>7. Speed and size</h2>
 <p>Per image at imgsz {hp['imgsz']} (batch 1, RTX 5060 Ti): preprocess {sp['preprocess']:.1f} ms, inference {sp['inference']:.1f} ms,
