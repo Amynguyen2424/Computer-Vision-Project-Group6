@@ -1,7 +1,7 @@
 """Build the YOLO dataset for the gesture-controlled photo booth (Group 6).
 
 Reads the group Google Drive folder (images/ + labels/, files named <class>_<NNN>.<ext>),
-by default straight from Google Drive for desktop (G:),
+by default straight from Google Drive for desktop (see README),
 checks every image/label pair, fixes Joseph's class-ID order, and copies the files
 into dataset/images/{train,val,test} and dataset/labels/{train,val,test}.
 
@@ -10,14 +10,15 @@ Split (per class, from the group's split doc, 80/10/10):
     Team   369-400 -> test (our own photos are the test data, as the brief says)
 
 Usage:
-    python prepare_dataset.py                       (Drive for desktop, G:)
-    python prepare_dataset.py --images <dir> [<dir> ...] --labels <dir>
+    python prepare_dataset.py                       (finds the Drive for desktop folder)
+    python prepare_dataset.py --images <dir> --labels <dir>
 """
 import argparse
 import csv
 import random
 import re
 import shutil
+import string
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -27,11 +28,18 @@ DRIVE_FOLDER_ID = "1etLHDUerYnEui6lrK9L7-p1An5c1jLfO"
 
 
 def find_drive_dataset():
-    """The group Drive folder as mounted by Google Drive for desktop (G:), or None."""
-    for root in [Path("G:/My Drive") / DRIVE_FOLDER,
-                 Path("G:/.shortcut-targets-by-id") / DRIVE_FOLDER_ID / DRIVE_FOLDER]:
-        if (root / "images").is_dir() and (root / "labels").is_dir():
-            return root
+    """The group Drive folder as mounted by Google Drive for desktop, or None.
+
+    Windows mounts Drive as a drive letter (usually G:), macOS under ~/Library/CloudStorage.
+    The shared folder shows up under My Drive or, once a shortcut to it exists, .shortcut-targets-by-id.
+    """
+    mounts = [Path(f"{letter}:/") for letter in string.ascii_uppercase]
+    mounts += sorted((Path.home() / "Library" / "CloudStorage").glob("GoogleDrive-*"))
+    for mount in mounts:
+        for root in [mount / "My Drive" / DRIVE_FOLDER,
+                     mount / ".shortcut-targets-by-id" / DRIVE_FOLDER_ID / DRIVE_FOLDER]:
+            if (root / "images").is_dir() and (root / "labels").is_dir():
+                return root
     return None
 
 CLASSES = {"palm": 0, "fist": 1, "like": 2, "dislike": 3}
@@ -43,13 +51,8 @@ TEAM = [(369, 376, "Amy"), (377, 384, "Ben"), (385, 392, "Daff"), (393, 400, "Jo
 N_VAL, N_TEST_HAGRID = 40, 8
 SEED = 42
 
-# Joseph's labels don't use our class order. His first export (MakeSense list like,
-# dislike, palm, fist) and the redone Drive labels of 2026-11-05 (palm, like, dislike,
-# fist) differ, so each file is mapped with whichever order matches its file name.
-JOSEPH_REMAPS = [
-    {0: 0, 1: 2, 2: 3, 3: 1},   # 2026-11-05 Drive labels: palm=0, like=1, dislike=2, fist=3
-    {0: 2, 1: 3, 2: 0, 3: 1},   # first export: like=0, dislike=1, palm=2, fist=3
-]
+# Joseph's labels use the class order palm, like, dislike, fist (MakeSense label list).
+JOSEPH_REMAP = {0: 0, 1: 2, 2: 3, 3: 1}
 
 OUT = Path(__file__).parent / "dataset"
 
@@ -79,40 +82,36 @@ def read_label(path):
 
 
 def remap_joseph(rows, expected):
-    """Map Joseph's class IDs to ours with the order that matches the file name."""
-    for remap in JOSEPH_REMAPS:
-        mapped = [(remap.get(c, c), *xywh) for c, *xywh in rows]
-        if all(c == expected for c, *_ in mapped):
-            return mapped
-    return rows   # no order fits; the class-ID check reports it
+    """Map Joseph's class IDs to ours, unless the file is already in our order (e.g. re-exported)."""
+    mapped = [(JOSEPH_REMAP.get(c, c), *xywh) for c, *xywh in rows]
+    return mapped if all(c == expected for c, *_ in mapped) else rows   # else the class-ID check reports it
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--images", nargs="+", type=Path)
+    ap.add_argument("--images", type=Path)
     ap.add_argument("--labels", type=Path)
     args = ap.parse_args()
     if args.images is None or args.labels is None:
         drive = find_drive_dataset()
         if drive is None:
-            sys.exit(f"Can't find '{DRIVE_FOLDER}' on G:. Install Google Drive for desktop and add the "
-                     "shared folder to My Drive, or pass --images and --labels.")
-        args.images = args.images or [drive / "images"]
+            sys.exit(f"Can't find '{DRIVE_FOLDER}'. Install Google Drive for desktop and add a shortcut to the "
+                     "shared folder in My Drive (see README), or pass --images and --labels.")
+        args.images = args.images or drive / "images"
         args.labels = args.labels or drive / "labels"
         print(f"reading from Google Drive: {drive}")
 
     # Files not named <class>_<NNN> (e.g. Drive's "Copy of palm_369.txt") are skipped.
     images, problems, ignored = {}, [], []
-    for d in args.images:
-        for p in d.iterdir():
-            if p.suffix.lower() not in IMAGE_EXTS:
-                continue
-            if not NAME_RE.match(p.stem):
-                ignored.append(p.name)
-            elif p.stem in images:
-                problems.append(f"duplicate image: {p.stem}")
-            else:
-                images[p.stem] = p
+    for p in args.images.iterdir():
+        if p.suffix.lower() not in IMAGE_EXTS:
+            continue
+        if not NAME_RE.match(p.stem):
+            ignored.append(p.name)
+        elif p.stem in images:
+            problems.append(f"duplicate image: {p.stem}")
+        else:
+            images[p.stem] = p
     labels = {}
     for p in args.labels.glob("*.txt"):
         if NAME_RE.match(p.stem):

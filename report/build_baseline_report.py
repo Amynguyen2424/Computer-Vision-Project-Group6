@@ -197,7 +197,6 @@ def build_html(d):
     sp = ea["predict_speed_ms_per_image"]
     total_ms = sum(sp.values())
     n_team = int((man["source"] == "team").sum())
-    held_out = 8 if (man[(man["source"] == "team") & (man["class"] == "palm")].shape[0] < 32) else 0
     worst_cls = cls["recall"].idxmin()
     small = size.iloc[0]
     area = d["hands"]["area_frac"]
@@ -230,9 +229,6 @@ def build_html(d):
 
     dup_txt = "; ".join(f"<code>{a}</code> ({pa}) = <code>{b}</code> ({pb})" for a, pa, b, pb in dups)
     data_issues = []
-    if held_out:
-        data_issues.append(("Data gap.", f"Amy's <code>palm_369</code>–<code>palm_376</code> have no label files yet, so the palm class has only "
-                            f"{int(team_cls.loc['palm', 'hands'])} labelled hands in our photos instead of about 30."))
     if dups:
         data_issues.append(("Duplicate photos.", (f"{len(dups)} pairs of our test photos are" if len(dups) > 1 else "One pair of our test photos is")
                             + f" the same picture contributed by two members ({dup_txt}). "
