@@ -398,30 +398,23 @@ which is saturated at {val['mAP50']:.2f}.</li>
 </body></html>"""
 
 
-def make_figures(d):
+def main():
     BUILD.mkdir(exist_ok=True)
+    d = load()
     h = d["history"]
     fig_training(h, int(h.loc[h["metrics/mAP50-95(B)"].idxmax(), "epoch"]))
     fig_per_class(d["per_class"])
     fig_sweep(d["sweep"], d["ea"]["conf"], d["ea"]["best_F1_conf"]["conf"])
     fig_breakdown(d["size"], d["person"])
+    html = BUILD / "Baseline_Evaluation_Report.html"
+    html.write_text(build_html(d), encoding="utf-8")
 
-
-def print_pdf(html, pdf):
     browser = next((b for b in BROWSERS if b.exists()), None)
     if browser is None:
         sys.exit(f"No Edge/Chrome found; open {html} in a browser and print it to PDF.")
     subprocess.run([str(browser), "--headless", "--disable-gpu", "--no-pdf-header-footer",
-                    f"--print-to-pdf={pdf}", html.as_uri()], check=True, capture_output=True, timeout=120)
-    print("wrote", pdf)
-
-
-def main():
-    d = load()
-    make_figures(d)
-    html = BUILD / "Baseline_Evaluation_Report.html"
-    html.write_text(build_html(d), encoding="utf-8")
-    print_pdf(html, PDF)
+                    f"--print-to-pdf={PDF}", html.as_uri()], check=True, capture_output=True, timeout=120)
+    print("wrote", PDF)
 
 
 if __name__ == "__main__":
