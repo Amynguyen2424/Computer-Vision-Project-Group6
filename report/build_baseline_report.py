@@ -180,7 +180,7 @@ def table(df, fmt="{:.3f}", index_name=""):
     return f"<table><thead><tr><th>{index_name}</th>{head}</tr></thead><tbody>{body}</tbody></table>"
 
 
-def build_html(d, kicker="IAT 360 Computer Vision Project · Group 6 · Gesture-controlled photo booth"):
+def build_html(d):
     m, ea, pc, h = d["metrics"], d["ea"], d["per_class"], d["history"]
     hp = m["hyperparameters"]
     man = d["manifest"]
@@ -266,7 +266,7 @@ def build_html(d, kicker="IAT 360 Computer Vision Project · Group 6 · Gesture-
 <style>{css}</style></head><body>
 
 <header>
-  <p class="kicker">{kicker}</p>
+  <p class="kicker">IAT 360 Computer Vision Project · Group 6 · Gesture-controlled photo booth</p>
   <h1>Baseline model evaluation</h1>
   <p class="byline">YOLOv8s fine-tuned to detect four hand gestures · Ben Nichiporik, Daffodil Ho, Joseph Lee, Thu Nguyen · {date.today():%B %Y}</p>
 </header>
