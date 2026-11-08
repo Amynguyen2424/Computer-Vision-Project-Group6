@@ -1,15 +1,16 @@
-"""Build report/Imgsz_Tuning_Report.pdf: Ben's imgsz tuning compared with the baseline (Group 6 gesture detector).
+"""Build report/Baseline_and_imgsz_Tuning_Report.pdf (Group 6 gesture detector), one PDF in two parts:
 
-Every number is read from the saved results (results/tuning_imgsz_summary.csv and results/<run>/), so after
-re-running Gesture_YOLO_Tuning_imgsz.ipynb just run this again:
+    Part A  the full baseline evaluation (build_baseline_report.py)
+    Part B  Ben's imgsz tuning (480 / 800 / 960) compared with the baseline
+
+Every number is read from the saved results (results/baseline/, results/imgsz_*/ and
+results/tuning_imgsz_summary.csv), so after re-running the notebooks just run this again:
 
     python report/build_imgsz_report.py
 
-Shares the look and helpers of build_baseline_report.py; figures and the HTML source go to report/build/.
+Figures and the HTML source go to report/build/.
 """
 import json
-import subprocess
-import sys
 from datetime import date
 from pathlib import Path
 
@@ -17,10 +18,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from build_baseline_report import (BROWSERS, BUILD, CLASSES, GRID, INK, INK_2, LOOSE_BOXES, ROOT, SERIES,
-                                   UNLABELLED, bootstrap, table)
+import build_baseline_report as baseline_report
+from build_baseline_report import BUILD, CLASSES, GRID, INK, INK_2, ROOT, SERIES, bootstrap, print_pdf, table
 
-PDF = Path(__file__).resolve().parent / "Imgsz_Tuning_Report.pdf"
+PDF = Path(__file__).resolve().parent / "Baseline_and_imgsz_Tuning_Report.pdf"
+KICKER = "IAT 360 Computer Vision Project · Group 6 · Gesture-controlled photo booth"
 RESULTS = ROOT / "results"
 SIZES = [480, 640, 800, 960]
 RUN = {480: "imgsz_480", 640: "baseline", 800: "imgsz_800", 960: "imgsz_960"}
@@ -165,10 +167,6 @@ def build_html(d):
                          "model trained at this size": [f"{s.loc[x, 'team mAP50']:.3f}" for x in SIZES]},
                         index=[LABEL[x] for x in SIZES])
 
-    loose_missed = int((d["hands"][640]["file"].isin(LOOSE_BOXES) & ~d["hands"][640]["correct"]).sum())
-    p = d["preds"][640]
-    label_bg = int((p["file"].isin(LOOSE_BOXES + list(UNLABELLED)) & (p["true_class"] == "background")).sum())
-
     css = (Path(__file__).parent / "report.css").read_text()
     return f"""<!doctype html><html><head><meta charset="utf-8"><title>Image Size Tuning</title>
 <style>{css}
@@ -178,7 +176,7 @@ h1 {{ font-size: 20pt; }}
 </style></head><body>
 
 <header>
-  <p class="kicker">IAT 360 Computer Vision Project · Group 6 · Hyperparameter tuning</p>
+  <p class="kicker">Part B · Hyperparameter tuning</p>
   <h1>Image size (<code style="font-size:18pt">imgsz</code>) compared with the baseline</h1>
   <p class="byline">Tuned by Ben Nichiporik · YOLOv8s gesture detector · imgsz 480 / 800 / 960 vs baseline 640 · {date.today():%B %Y}</p>
 </header>
@@ -195,11 +193,11 @@ h1 {{ font-size: 20pt; }}
 but the baseline (640) keeps the best F1 at the deployment threshold and the best speed/accuracy balance. A larger input did not
 help small hands, because the baseline's problem is unfamiliar <i>scenes</i>, not too few pixels.</p>
 
-<h2>1. Setup and hypothesis</h2>
+<h2>B1. Setup and hypothesis</h2>
 <div class="cols">
 <div>
 <p><code>imgsz</code> is the size (longest side, in pixels) that every image is resized to for training and inference.
-The baseline evaluation showed that the model's main weakness on our own photos is <b>small hands</b>: only
+The baseline evaluation (Part A) showed that the model's main weakness on our own photos is <b>small hands</b>: only
 {small[640]['recall']:.0%} of the {n_small} hands covering under 1% of the image were found. At imgsz 640 those hands are
 only about {small_px.min():.0f}-{small_px.max():.0f} px across (median hand {px.median():.0f} px).</p>
 <p><b>Hypothesis.</b> A larger <code>imgsz</code> (800, 960) keeps more pixels per hand and should raise recall on small
@@ -216,7 +214,7 @@ size it was trained at, and the headline is our own photos only: {n_imgs} images
 </div>
 </div>
 
-<h2>2. Results compared with the baseline</h2>
+<h2>B2. Results compared with the baseline</h2>
 <div class="small-table">{table(res, index_name="imgsz")}</div>
 <p class="caption">mAP, precision and recall from Ultralytics on our photos (val = HaGRID validation). F1, small hands (&lt;1% of the
 image) and fixed / broken (hands the baseline got wrong that this run gets right / the reverse) at conf 0.25, IoU 0.5.</p>
@@ -243,7 +241,7 @@ but it finds the fewest small hands ({small_found[480]} / {n_small}).</li>
 is not a real improvement on a sample this small, so a larger <code>imgsz</code> did not fix the baseline's main weakness.
 Per class, fist stays the weakest class at every size (recall {", ".join(f"{d['cls'][x].loc['fist', 'recall']:.2f}" for x in SIZES)}).</p>
 
-<h2>3. Why a larger image size didn't help</h2>
+<h2>B3. Why a larger image size didn't help</h2>
 <div class="cols">
 <div>
 <p><b>Resolution was not the real problem.</b> The training set already has plenty of small hands: {tr_small} of the
@@ -263,14 +261,10 @@ HaGRID's, and upscaling pushes them further from the sizes seen in training. Tra
 mismatch cost.</p>
 </div>
 </div>
-<p><b>Label errors.</b> A few of our test labels contain human error (loose boxes on Ben's <code>fist_380/381/384</code>,
-unlabelled raised hands in <code>fist_376</code>, <code>fist_382</code> and <code>palm_388</code>, an unclear gesture in
-<code>palm_376</code>, and the duplicate pair <code>dislike_388</code> = <code>dislike_393</code>). For the baseline they cause
-{loose_missed} of the {ea[640]['missed_hands']} missed hands and {label_bg} of the {ea[640]['background_false_positives']}
-background predictions. Every run is scored against the same labels, so the comparison between sizes is still fair, but absolute
-scores (fist especially) are slightly pessimistic.</p>
+<p><b>Label errors.</b> The labelling mistakes listed in Part A, Section 8 are still in the test set. Every run is scored
+against the same labels, so the comparison between sizes is still fair, but absolute scores (fist especially) are slightly pessimistic.</p>
 
-<h2>4. Choice and next steps</h2>
+<h2>B4. Choice and next steps</h2>
 <ol>
 <li><b>For the group comparison, my best value is imgsz {best}</b> (best team mAP50, mAP50-95 and fist mAP50). The gain over the
 baseline is {signed(s.loc[best, 'team mAP50'] - s.loc[640, 'team mAP50'])} mAP50, effectively a tie, and it costs about
@@ -286,22 +280,29 @@ combining it with imgsz {best} is the combination worth testing.</li>
 </body></html>"""
 
 
+def body(html):
+    return html.split("<body>", 1)[1].rsplit("</body>", 1)[0]
+
+
 def main():
-    BUILD.mkdir(exist_ok=True)
+    bd = baseline_report.load()
+    baseline_report.make_figures(bd)
+    part_a = baseline_report.build_html(bd, kicker=f"{KICKER} · Part A · Baseline")
+
     d = load()
     ci = bootstrap(d["hands"][640], d["preds"][640])
     fig_overview(d["summary"], (ci["F1"][1] - ci["F1"][0]) / 2)
     fig_breakdown(d["size"], d["cls"])
     print("fixed / broken vs baseline:", fixed_broken(d["hands"]))
-    html = BUILD / "Imgsz_Tuning_Report.html"
-    html.write_text(build_html(d), encoding="utf-8")
+    part_b = build_html(d)
 
-    browser = next((b for b in BROWSERS if b.exists()), None)
-    if browser is None:
-        sys.exit(f"No Edge/Chrome found; open {html} in a browser and print it to PDF.")
-    subprocess.run([str(browser), "--headless", "--disable-gpu", "--no-pdf-header-footer",
-                    f"--print-to-pdf={PDF}", html.as_uri()], check=True, capture_output=True, timeout=120)
-    print("wrote", PDF)
+    # Part B's <head> already holds report.css plus its own table styles; Part A starts the document
+    head = part_b.split("<body>", 1)[0].replace("<title>Image Size Tuning</title>",
+                                                "<title>Baseline and imgsz Tuning</title>")
+    html = BUILD / "Baseline_and_imgsz_Tuning_Report.html"
+    html.write_text(f"{head}<body>{body(part_a)}<div style=\"break-before: page\"></div>{body(part_b)}</body></html>",
+                    encoding="utf-8")
+    print_pdf(html, PDF)
 
 
 if __name__ == "__main__":
