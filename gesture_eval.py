@@ -5,7 +5,8 @@ are scored the same way:
 
     evaluate(weights, imgsz, out_dir)        val / test (all) / test (team only) metrics + plots
     error_analysis(weights, imgsz, out_dir)  team photos at conf 0.25: per person, box size,
-                                             confusion matrix, threshold sweep, failure cases
+                                             confusion matrix, threshold sweep, failure and
+                                             correct cases, precision/recall/F1/accuracy
 
 Re-evaluate saved models (e.g. after the dataset is rebuilt with prepare_dataset.py):
     python gesture_eval.py models/*.pt
@@ -179,11 +180,15 @@ def _score(images, conf, iou_thr):
 
 
 def _prf(hands, preds):
+    """Detection precision, recall, F1 and accuracy. Accuracy = correct / (hands + predictions - correct),
+    i.e. TP / (TP + FP + FN): a hand counts against it if it is missed, mislabelled, or a false detection."""
     tp = int(hands["correct"].sum())
     p = tp / len(preds) if len(preds) else 0.0
     r = tp / len(hands) if len(hands) else 0.0
+    union = len(hands) + len(preds) - tp
     return {"hands": len(hands), "predictions": len(preds), "correct": tp,
-            "precision": p, "recall": r, "F1": 2 * p * r / (p + r) if p + r else 0.0}
+            "precision": p, "recall": r, "F1": 2 * p * r / (p + r) if p + r else 0.0,
+            "accuracy": tp / union if union else 0.0}
 
 
 def _confusion_plot(hands, preds, path, conf):
@@ -214,15 +219,24 @@ def _failure_grid(images, hands, preds_by_file, path, n=8):
     fails = hands[~hands["correct"]]
     wrong = fails[fails["pred_class"] != "missed"].sort_values("file").head(n // 2)
     missed = fails[fails["pred_class"] == "missed"].sort_values("area_frac").head(n - len(wrong))
-    fails = pd.concat([missed, wrong])
-    if fails.empty:
+    _crop_grid(images, pd.concat([missed, wrong]), preds_by_file, path)
+
+
+def _correct_grid(images, hands, preds_by_file, path, per_class=2):
+    """Crops around correctly detected hands, the first per_class of each gesture (by file name)."""
+    right = hands[hands["correct"]].sort_values("file").groupby("class", sort=False).head(per_class)
+    _crop_grid(images, right.sort_values(["class", "file"]), preds_by_file, path)
+
+
+def _crop_grid(images, rows, preds_by_file, path):
+    if rows.empty:
         return
     by_file = {im["file"]: im for im in images}
     cols = 4
-    fig, axes = plt.subplots(int(np.ceil(len(fails) / cols)), cols, figsize=(16, 4.4 * np.ceil(len(fails) / cols)))
+    fig, axes = plt.subplots(int(np.ceil(len(rows) / cols)), cols, figsize=(16, 4.4 * np.ceil(len(rows) / cols)))
     for ax in np.ravel(axes):
         ax.axis("off")
-    for ax, (_, f) in zip(np.ravel(axes), fails.iterrows()):
+    for ax, (_, f) in zip(np.ravel(axes), rows.iterrows()):
         im = by_file[f["file"]]
         img = cv2.imread(str(im["path"]))
         h, w = img.shape[:2]
@@ -239,7 +253,8 @@ def _failure_grid(images, hands, preds_by_file, path, n=8):
             cv2.putText(img, f"{CLASSES[c]} {cf:.2f}", (int(box[0]), int(box[1]) - lw * 2),
                         cv2.FONT_HERSHEY_SIMPLEX, lw / 3, PRED_COLOR, lw)
         ax.imshow(img[cy1:cy2, cx1:cx2, ::-1])
-        what = "missed" if f["pred_class"] == "missed" else f"predicted {f['pred_class']}"
+        what = ("missed" if f["pred_class"] == "missed" else
+                f"correct ({f['conf']:.2f})" if f["correct"] else f"predicted {f['pred_class']}")
         ax.set_title(f"{Path(f['file']).stem} ({f['person']}): {f['class']} {what}\n"
                      f"hand = {f['area_frac'] * 100:.2f}% of image", fontsize=10)
     fig.tight_layout(); fig.savefig(path, dpi=80); plt.close(fig)
@@ -249,7 +264,8 @@ def error_analysis(weights, imgsz, out_dir, conf=0.25, iou_thr=0.5):
     """Detection-level analysis of the team photos at a deployment threshold.
 
     Writes error_analysis.json, team_by_person.csv, team_by_size.csv, team_by_class.csv,
-    conf_sweep.csv, team_hands.csv, team_preds.csv, confusion_conf025.png and failure_cases.jpg.
+    conf_sweep.csv, team_hands.csv, team_preds.csv, confusion_conf025.png, failure_cases.jpg
+    and correct_cases.jpg.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -306,6 +322,7 @@ def error_analysis(weights, imgsz, out_dir, conf=0.25, iou_thr=0.5):
     preds_by_file = {im["file"]: [(c, cf, b) for c, cf, b in zip(im["pred_cls"], im["pred_conf"], im["pred_xyxy"])
                                   if cf >= conf] for im in images}
     _failure_grid(images, hands, preds_by_file, out_dir / "failure_cases.jpg")
+    _correct_grid(images, hands, preds_by_file, out_dir / "correct_cases.jpg")
 
     summary = {
         "conf": conf, "iou": iou_thr, "images": len(images),

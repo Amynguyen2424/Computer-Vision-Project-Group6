@@ -17,6 +17,16 @@ In the following 3 weeks, you will be building on your previous work with image 
 
 YOLOv8s fine-tuned to detect four hand gestures (palm, fist, like, dislike). The images and labels live in the shared Google Drive folder **ComputerVisionProject-Group6-Dataset**; the code reads them from there through the Google Drive desktop app, so nothing has to be downloaded by hand.
 
+**Dataset (images + YOLO labels):** https://drive.google.com/drive/folders/1etLHDUerYnEui6lrK9L7-p1An5c1jLfO. At 2.3 GB of full-resolution photos it is too large for GitHub, so it stays on Drive. `prepare_dataset.py` builds it into the YOLO folder layout that `data.yaml` points to:
+
+```
+dataset/
+  images/train  images/val  images/test     1280 / 160 / 160 images
+  labels/train  labels/val  labels/test     one .txt per image: class x_center y_center width height (0-1)
+  split_manifest.csv                        split, source (HaGRID or team) and person for every image
+  test_team.txt                             the 128 team photos, used by data_team_test.yaml
+```
+
 ## 1. Get the code
 ```
 git clone https://github.com/Amynguyen2424/Computer-Vision-Project-Group6.git
@@ -28,7 +38,7 @@ git checkout Ben
 1. Download and install it from https://www.google.com/drive/download/ and sign in with the Google account that has access to the group folder.
 2. In Google Drive in your browser, open **Shared with me**, right-click **ComputerVisionProject-Group6-Dataset** and choose **Organize → Add shortcut → My Drive**. The desktop app only sees shared folders that have a shortcut in your Drive.
 3. Check that the folder shows up: on Windows under the Google Drive drive (usually `G:\My Drive`), on Mac under **Google Drive** in Finder.
-4. Optional, makes the first build faster: right-click the folder there and choose **Offline access → Available offline** (about 1.4 GB).
+4. Optional, makes the first build faster: right-click the folder there and choose **Offline access → Available offline** (about 2.3 GB).
 
 ## 3. Set up Python
 You need Python 3.10 or newer. In the project folder:
@@ -68,7 +78,7 @@ Open a notebook, check that the kernel (top right) is **Python (CV Group 6)**, t
 | `gesture_eval.py` | Baseline hyperparameters (`BASELINE`) and the evaluation every run uses. For your own hyperparameter, train with `{**BASELINE, "<name>": value}` and score with `evaluate()` and `error_analysis()` |
 | `prepare_dataset.py` | Builds `dataset/` from the Drive folder |
 | `report/Baseline_Evaluation_Report.pdf` | Detailed baseline evaluation. Rebuild it with `python report/build_baseline_report.py` (Windows, needs Microsoft Edge) |
-| `models/`, `results/` | Saved weights and the evaluation output of every run |
+| `models/`, `results/` | Saved weights and the evaluation output of every run: precision, recall, F1 and accuracy (`error_analysis.json`), confusion matrix, and example correct (`correct_cases.jpg`) and incorrect (`failure_cases.jpg`) detections |
 
 Our own photos (numbers 369-400 of each class) are the test set, so always compare models on the **team-only test** numbers, not on validation.
 

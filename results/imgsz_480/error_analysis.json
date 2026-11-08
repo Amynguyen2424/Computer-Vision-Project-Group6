@@ -8,6 +8,7 @@
   "precision": 0.8356,
   "recall": 0.7922,
   "F1": 0.8133,
+  "accuracy": 0.6854,
   "missed_hands": 27,
   "wrong_class": 5,
   "background_false_positives": 19,
@@ -19,8 +20,8 @@
     "F1": 0.8179
   },
   "predict_speed_ms_per_image": {
-    "preprocess": 1.81,
-    "inference": 11.58,
-    "postprocess": 2.37
+    "preprocess": 1.26,
+    "inference": 9.83,
+    "postprocess": 1.57
   }
 }
