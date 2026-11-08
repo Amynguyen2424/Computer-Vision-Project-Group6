@@ -7,6 +7,7 @@ are scored the same way:
     error_analysis(weights, imgsz, out_dir)  team photos at conf 0.25: per person, box size,
                                              confusion matrix, threshold sweep, failure and
                                              correct cases, precision/recall/F1/accuracy
+    summary_row(out_dir)                     one comparison-table row from a saved results folder
 
 Re-evaluate saved models (e.g. after the dataset is rebuilt with prepare_dataset.py):
     python gesture_eval.py models/*.pt
@@ -339,6 +340,38 @@ def error_analysis(weights, imgsz, out_dir, conf=0.25, iou_thr=0.5):
     (out_dir / "error_analysis.json").write_text(json.dumps(summary, indent=2))
     return {"summary": summary, "by_person": by_person, "by_class": by_class, "by_size": by_size,
             "sweep": sweep, "confusion": cm, "hands": hands, "preds": preds}
+
+
+# --------------------------------------------------------------------------- comparing saved runs
+
+def train_info(results_csv):
+    """Epochs run, best epoch (by val mAP50-95) and training time from an Ultralytics results.csv."""
+    h = pd.read_csv(results_csv)
+    h.columns = h.columns.str.strip()
+    best = h.loc[h["metrics/mAP50-95(B)"].idxmax()]
+    return {"epochs_run": int(len(h)), "best_epoch": int(best["epoch"]),
+            "train_minutes": round(float(h["time"].iloc[-1]) / 60, 1)}
+
+
+def summary_row(out_dir):
+    """One comparison row for a run, read from the files evaluate() and error_analysis() saved in
+    out_dir (plus results.csv from training), so the tuning notebooks compare runs without re-scoring."""
+    out_dir = Path(out_dir)
+    overall = json.loads((out_dir / "metrics.json").read_text())["overall"]
+    val = next(v for k, v in overall.items() if k.startswith("validation"))
+    team = next(v for k, v in overall.items() if k.startswith("test, team only"))
+    per_class = pd.read_csv(out_dir / "per_class.csv", index_col=[0, 1])
+    ea = json.loads((out_dir / "error_analysis.json").read_text())
+    by_size = pd.read_csv(out_dir / "team_by_size.csv", index_col=0)
+    info = train_info(out_dir / "results.csv") if (out_dir / "results.csv").exists() else {}
+    return {**info,
+            "val mAP50": val["mAP50"], "val mAP50-95": val["mAP50-95"],
+            "team P": team["precision"], "team R": team["recall"], "team F1": team["F1"],
+            "team mAP50": team["mAP50"], "team mAP50-95": team["mAP50-95"],
+            "team fist mAP50": per_class.loc[("test (team only)", "fist"), "mAP50"],
+            "small-hand recall": by_size["recall"].iloc[0],
+            "P @ conf 0.25": ea["precision"], "R @ conf 0.25": ea["recall"],
+            "F1 @ conf 0.25": ea["F1"], "accuracy @ conf 0.25": ea["accuracy"]}
 
 
 def main():
